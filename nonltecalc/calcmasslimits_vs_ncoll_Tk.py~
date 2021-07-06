@@ -1,0 +1,155 @@
+import numpy as np
+import matplotlib.pyplot as pl
+#import pidly
+#idl=pidly.IDL('/opt/ioa/idl/idl82/bin/idl')
+#idl('.run ../localpopcalc.pro')
+import pickle
+#import pyfits as pf
+from scipy.constants import h,c,k
+import time
+import uuid
+import os
+import sys
+sys.path.insert(0, '/sma/SMAusers/lmatra/CO_excitation')
+import elrovibpopcalc_CO
+reload(elrovibpopcalc_CO)
+import elrovibpopcalc_CO_noISRFUV
+reload(elrovibpopcalc_CO_noISRFUV)
+import scipy.ndimage
+from scipy.ndimage.filters import gaussian_filter1d
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
+from scipy.ndimage.interpolation import shift
+
+rcParams['font.family'] = 'Times New Roman'
+font={'size':25}	
+rc('font', **font)
+rc('axes', linewidth=2)
+rc('xtick.major', width=2, size=8)
+rc('xtick.minor', width=2, size=4)
+rc('ytick.major', width=2, size=8)
+rc('ytick.minor', width=2, size=4)
+rc('xtick', labelsize=22)
+rc('ytick', labelsize=22)
+matplotlib.rcParams.update({'figure.autolayout': True})
+
+#Read continuum mean intensity file
+#a=np.genfromtxt('mean_intensity.out',skip_header=4)
+#b=a.reshape(261,2,38,99)*1e23 #Turn to Jy sr-1 from erg s-1 cm-2 Hz-1 sr-1
+#meanintmax= np.max( np.max(b,axis=(2,1)), axis=1 )
+#freqmeanint = np.genfromtxt('/sma/SMAusers/lmatra/CO_excitation/freq_rottransCO_GHz.txt')
+##pl.imshow( np.max(b,axis=(2,1)) , origin='lower')
+##Make test plot to see if numbers make sense
+#meanintcheck=0
+#if meanintcheck:
+#	pl.figure(figsize=(12,7))
+#	pl.plot(c/freq/1e9*1e6, np.max(b,axis=(2,1))[:,48])
+#	pl.xscale('log')
+#	pl.yscale('log')
+#	pl.xlabel(r'Wavelength ($\mu$m)')
+#	pl.ylabel(r'J$_{\nu}$ (Jy/sr)')
+#	pl.title('HR4796 maximum continuum mean intensity (at ring centre)', fontsize=25)
+#	#pl.savefig('Mean_intensity_check_HR4796.pdf')
+##Print max mean intensities to file
+meanintfilename=None
+#'meanintrottrans_HR4796_max.npy'
+#np.save(meanintfilename, meanintmax)
+
+
+#Read star flux from Grant's sdb file.
+starfluxfilename='./HD172555_starfluxJyfromEarth.npy'
+import json
+import matplotlib.pyplot as pl
+import numpy as np
+
+filename='./SED_HD172555.json'
+with open(filename, 'r') as f:
+	datastore=json.load(f)
+starspecwav=np.asarray(datastore['model_spectra'][0]['wavelength']) #micron
+starspecfnujy=np.asarray(datastore['model_spectra'][0]['fnujy']) #Jy
+#starspecfnujy[(starspecwav<0.3)]=0.0
+np.save(starfluxfilename, [starspecwav, starspecfnujy])
+#Check
+pl.figure()
+pl.plot(starspecwav, starspecfnujy)
+pl.xscale('log')
+pl.yscale('log')
+
+#import sys
+#sys.exit()
+
+
+##Read continuum intensity file SPECIFICALLY FOR HD95086, for star.
+#starfluxfilename='/sma/SMAusers/lmatra/HD95086/cycle3/analysis/excitation/HD95086_starfluxJyfromEarth.npy'
+#a=np.genfromtxt('hd95086_spec.dat')
+#np.save(starfluxfilename, [a[::-1,0],a[::-1,2]])
+##Check
+#pl.figure()
+#pl.plot(a[::-1,0],a[::-1,2])
+#pl.plot(a[::-1,0],a[::-1,2], 'o')
+#pl.xscale('log')
+#pl.yscale('log')
+
+#Measured upper limit in Jy km/s
+measureduplim=0.1218 #25.0*1e-3
+
+#Define electron density and temperature arrays to loop over
+ncollps=10**(np.arange(16)-5.0)
+temps=np.asarray([20.0,50.0,100.0,169.0,250.0])	#10**(np.arange(12)/11.0*(np.log10(1000.0)-np.log10(5.0))+np.log10(5))
+
+masslims=np.zeros((ncollps.size, temps.size))
+fpoplev1=np.zeros((ncollps.size, temps.size))
+fpoplev2=np.zeros((ncollps.size, temps.size))
+pops=np.zeros((ncollps.size, temps.size,540))
+for i in np.arange(ncollps.size):
+	for j in np.arange(temps.size):
+		masslims[i,j]=elrovibpopcalc_CO.elrovibpopcalc_COfunc(tgas=temps[j], ncollp=ncollps[i], datafile='/sma/SMAusers/lmatra/CO_excitation/COvibrot_Lambda_nelec2_nvib9_nrot30.dat', jnufilestar=starfluxfilename, linewithntrcoll=114067, distpc=28.3, distau=7.5, levupint=2, si=0, fluxJykmsinp=measureduplim)
+		#fpoplev2[i,j]=elrovibpopcalc_CO.elrovibpopcalc_COfunc(tgas=temps[j], ncollp=ncollps[i], datafile='/sma/SMAusers/lmatra/CO_excitation/COvibrot_Lambda_nelec2_nvib9_nrot30.dat', jnufilestar=starfluxfilename, linewithntrcoll=114067, distpc=132.1, distau=58.4, levupint=2)
+		#fpoplev1[i,j]=elrovibpopcalc_CO.elrovibpopcalc_COfunc(tgas=temps[j], ncollp=ncollps[i], datafile='/sma/SMAusers/lmatra/CO_excitation/COvibrot_Lambda_nelec2_nvib9_nrot30.dat', jnufilestar=starfluxfilename, linewithntrcoll=114067, distpc=132.1, distau=58.4, levupint=1)
+#, jnufilestar='/sma/SMAusers/lmatra/HD105/COmasscalc/HD105_starfluxJyfromEarth.npy'
+#, jnufilerot=meanintfilename
+print 'NB No disk continuum radiation field considered at the moment!'
+print masslims.min(), masslims.max()
+
+plotmasslims=1
+if plotmasslims:
+	pl.figure(figsize=(12,7))
+	#pl.plot(ncollps, masslims, ls='dotted', lw=2.0)
+	for i in np.arange(temps.size):
+		pl.plot(ncollps, masslims[:,i], linewidth=3.0, ls='solid', label=r'T$_{\rm k}$ = '+str(int(temps[i]))+' K', alpha=0.4)
+	pl.xscale('log')
+	pl.yscale('log')
+	pl.xlabel(r'e$^{-}$ density (cm$^{-3}$)')
+	pl.ylabel(r'CO mass (M$_{\oplus}$)')
+	pl.legend(frameon=0)
+	ax=pl.gca()
+	pl.text(0.04,0.12, 'HD172555', transform=ax.transAxes, fontsize=28)
+	pl.savefig('HD172555_21_COmass_vs_ncoll_Tk.pdf')
+	#pl.close()
+	#os.system('evince HD172555_21_COmass_vs_ncoll_Tk.pdf &')
+
+sys.exit()
+
+
+# If you want, here estimate optical thickness through an input CO column given the fractional populations calculated for the whole ncoll-tk range above
+nu=230.538e9
+coldens=4e12 #cm^-2
+tk2d=np.reshape(np.repeat(temps, ncollps.shape),[temps.shape[0],ncollps.shape[0]]).T
+deltanu=2.355*np.sqrt(2.0*k*tk2d/(28.0*1.67e-27))*nu/c
+B21=2.66e-6*(c**2.0)/(2.0*h*(nu**3.0))
+B12=B21*5.0/3.0
+tau=h*nu/4.0/np.pi/deltanu*(fpoplev1*B12-fpoplev2*B21)*coldens*1e4
+
+plottaus=1
+if plottaus:
+	pl.figure(figsize=(12,7))
+	#pl.plot(ncollps, masslims, ls='dotted', lw=2.0)
+	for i in np.arange(temps.size):
+		pl.plot(ncollps, tau[:,i], lw=2.0, ls='solid', label=r'T$_{\rm k}$ = '+str(int(temps[i]))+' K')
+	pl.xscale('log')
+	pl.yscale('log')
+	pl.xlabel(r'e$^{-}$ density (cm$^{-3}$)')
+	pl.ylabel(r'$\tau_{\nu}$')
+	pl.legend(frameon=0)
+	pl.savefig('HD172555_21_tau_vs_ncoll_Tk.pdf')
+print tau.min(), tau.max()
