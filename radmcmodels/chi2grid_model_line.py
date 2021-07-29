@@ -22,7 +22,7 @@ mpl.rc('ytick.minor', width=2, size=5)
 mpl.rc('xtick', labelsize=16)
 mpl.rc('ytick', labelsize=16)
 mpl.rcParams.update({'figure.autolayout': True})
-
+mpl.rcParams['pdf.fonttype']=42
 
 #Read in data
 freq_obs, sp_obs_mJy = np.load('./unbinned_spectrum_observed.npy')
@@ -52,12 +52,14 @@ else:
     logtemp, logmass = np.load('logtemplogmass_200temp_200mass_highres.npy')
     chisquare = np.load('chisquare_200temp_200mass_highres.npy')   
 
-fig = pl.figure(figsize=(8.3,6.5))
-ax = fig.subplots()
-im = ax.imshow(((chisquare-np.min(chisquare))), origin='lower', extent=(logmass[0],logmass[-1],logtemp[0], logtemp[-1]), aspect=5.0, cmap='inferno', vmax=30.0)
+fig = pl.figure(figsize=(17,7.3))
+ax = fig.subplots(nrows=1, ncols=2, gridspec_kw={'width_ratios': [0.9, 1.1]})
+im = ax[1].imshow(((chisquare-np.min(chisquare))), origin='lower', extent=(logmass[0],logmass[-1],logtemp[0], logtemp[-1]), aspect=5.0, cmap='inferno', vmax=30.0)
 im.cmap.set_over('white')
-ax.plot(np.log10(1.4e-5),np.log10(169.0),'o',color='red')
-ax.plot(np.log10(1.5e-2),np.log10(35.0),'o',color='cyan')
+ax[1].plot(np.log10(1.4e-5),np.log10(169.0),'o',color='red')
+ax[1].plot(np.log10(1.5e-2),np.log10(35.0),'o',color='cyan')
+
+
 
 
 #Normalised probability map (where P \propto exp(-0.5*chi), so Prel=P/Pmin=exp(-chi+chi_min)=exp(-deltachi2)), so peak probability is 1
@@ -82,17 +84,15 @@ while np.any(m):
     m = np.diff(V) == 0
 V.sort()    
 
-cts = ax.contour(H, V, origin='lower', linewidths=3.0, alpha=0.7, linestyles='dotted', extent=(logmass[0],logmass[-1],logtemp[0], logtemp[-1]), colors='white')
-cbar = fig.colorbar(im, ax=ax, label=r'$\Delta \chi^2$', fraction=0.05)
+cts = ax[1].contour(H, V, origin='lower', linewidths=3.0, alpha=0.7, linestyles='dotted', extent=(logmass[0],logmass[-1],logtemp[0], logtemp[-1]), colors='white')
+cbar = fig.colorbar(im, ax=ax[1], label=r'$\Delta \chi^2$', fraction=0.05)
 
-ax.set_yticks([np.log10(25),np.log10(50),np.log10(75),np.log10(100),np.log10(125),np.log10(150),np.log10(175),np.log10(200)])
-ax.set_yticklabels(['25','50','75','100','125','150','175','200'])
-ax.set_xticklabels(['dum',r'10$^{-5}$',r'10$^{-4}$',r'10$^{-3}$',r'10$^{-2}$',r'10$^{-1}$'])
-ax.set_xlabel(r'CO Mass [M$_{\oplus}$]')
-ax.set_ylabel('Temperature [K]')
-
-fig.savefig('chisquaremap_200temp_200mass_highres_sans.pdf')
-#os.system('open chisquaremap_200temp_200mass_highres_sans.pdf')
+ax[1].set_yticks([np.log10(25),np.log10(50),np.log10(75),np.log10(100),np.log10(125),np.log10(150),np.log10(175),np.log10(200)])
+ax[1].set_yticklabels(['25','50','75','100','125','150','175','200'])
+ax[1].set_xticklabels(['dum',r'10$^{-5}$',r'10$^{-4}$',r'10$^{-3}$',r'10$^{-2}$',r'10$^{-1}$'])
+ax[1].set_xlabel(r'CO Mass [M$_{\oplus}$]')
+ax[1].set_ylabel('Temperature [K]')
+ax[1].text(np.log10(1.5e-1),np.log10(175.0), 'b', fontweight='bold')
 
 
 newchansize=0.5 #km/s
@@ -105,17 +105,17 @@ modelspec_cold_rebinned = spectres.spectres(newvelarr[::-1], modelvels[::-1]-vst
 dataspec=spectres.spectres(newvelarr[::-1], v_obs[::-1], sp_obs_mJy[::-1],spec_errs=None, fill=0.0, verbose=True)
 dataspec=dataspec[::-1]
 
-pl.figure(figsize=(7,7))
-pl.plot(newvelarr,dataspec, drawstyle='steps-mid', alpha=0.4, color='black', linewidth=2.5, label='Data')
-pl.fill_between(newvelarr[::-1]+vstar, modelspec_warm_rebinned, alpha=0.15, color='red', label=r'Warm, low mass, optically thin model', linewidth=0.0)
-pl.fill_between(newvelarr[::-1]+vstar, modelspec_cold_rebinned, alpha=0.15, color='blue', label=r'Cold, high mass, optically thick model', linewidth=0.0)
-pl.plot(newvelarr[::-1]+vstar, modelspec_warm_rebinned, alpha=0.5, drawstyle='steps-mid', color='red', linestyle='dashed', linewidth=2.5)#, label=r'RADMC-3D, T = 169 K, M$_{\rm CO}$=10$^{-5}$ M$_{\oplus}$')
-pl.plot(newvelarr[::-1]+vstar, modelspec_cold_rebinned, alpha=0.5, drawstyle='steps-mid', color='blue', linestyle='dotted', linewidth=2.5)#, label=r'RADMC-3D, T = 35 K, M$_{\rm CO}$=2$\times$10$^{-3}$ M$_{\oplus}$')
-pl.ylabel('Flux (mJy)')
-pl.xlabel('Velocity (km/s)')
-pl.xlim(-28,30.3)
-pl.ylim(-15,20)
-pl.legend(frameon=False, loc=4)
 
-pl.savefig('Modelspectracomparison_sans.pdf')
-#os.system('open Modelspectracomparison_sans.pdf')
+ax[0].plot(newvelarr,dataspec, drawstyle='steps-mid', alpha=0.4, color='black', linewidth=2.5, label='Data')
+ax[0].fill_between(newvelarr[::-1]+vstar, modelspec_warm_rebinned, alpha=0.15, color='red', label=r'Warm, low mass, optically thin model', linewidth=0.0)
+ax[0].fill_between(newvelarr[::-1]+vstar, modelspec_cold_rebinned, alpha=0.15, color='blue', label=r'Cold, high mass, optically thick model', linewidth=0.0)
+ax[0].plot(newvelarr[::-1]+vstar, modelspec_warm_rebinned, alpha=0.5, drawstyle='steps-mid', color='red', linestyle='dashed', linewidth=2.5)#, label=r'RADMC-3D, T = 169 K, M$_{\rm CO}$=10$^{-5}$ M$_{\oplus}$')
+ax[0].plot(newvelarr[::-1]+vstar, modelspec_cold_rebinned, alpha=0.5, drawstyle='steps-mid', color='blue', linestyle='dotted', linewidth=2.5)#, label=r'RADMC-3D, T = 35 K, M$_{\rm CO}$=2$\times$10$^{-3}$ M$_{\oplus}$')
+ax[0].set_ylabel('Flux (mJy)')
+ax[0].set_xlabel('Velocity (km/s)')
+ax[0].set_xlim(-28,30.3)
+ax[0].set_ylim(-15,20)
+ax[0].legend(frameon=False, loc=4)
+ax[0].text(-26.0,18.0, 'a', fontweight='bold')
+fig.savefig('Modelspectracomparison_pluschisquaremap_sans.pdf')
+os.system('open Modelspectracomparison_pluschisquaremap_sans.pdf')
